@@ -57,19 +57,36 @@ Python packages (installed automatically, see [requirements.txt](requirements.tx
 
 ## Installation
 
-Both installers install for the current user only and need **no admin rights** for the app itself. Each one creates a private Python virtual environment, so your system Python is not touched. Running an installer again updates an existing install.
+Both installers install for the current user only and need **no admin rights** for the app itself. Each one creates a private Python virtual environment, so your system Python is not touched. Running an installer again updates an existing install.**Before following the steps below, make sure that the repository is already downloaded--refer to the instructions below to successfully download the repository.**
 
-### Linux
+### VIA Downloading the zip file
+
+Refer to these steps for downloading the zip file.
+1. Go back on the top of this repository
+2. Find and then left-click on the code button
+3. Click the download zip
+4. Extract the file and then proceed to the instructions below
+
+### VIA Cloning the repository
+
+Copy the line below and then run inside the terminal.
 ```bash
 git clone https://github.com/deestablishmentalism/Pomodoro-Timer.git pomodoro-timer
+```
+Then proceed to the steps below.
+
+### Linux
+**Exclude the first line if repository is already downloaded.**
+```bash
+git clone https://github.com/deestablishmentalism/Pomodoro-Timer.git pomodoro-timer # First line
 cd pomodoro-timer
 chmod +x installer/linux/*.sh
-./installer/linux/install.sh            # add --yes to accept all prompts
+./installer/linux/install.sh            
 ```
 This installs:
 - `~/.local/share/pomodoro-timer/`: the app and its virtual environment
 - `~/.local/bin/pomodoro-timer`: the launcher command
-- A **Pomodoro Timer** entry in your application menu
+- A **Pomodoro Timer** desktop entry in your application menu
 
 If the installer warns that `~/.local/bin` is not on your `PATH`, add this line to `~/.bashrc` (or your shell's rc file):
 ```bash
@@ -145,4 +162,5 @@ pomodoro-timer/
 ├── requirements.txt
 └── run.sh                            # Quick run from source (Linux)
 ```
-
+## Final Notes
+This app is highly customized for the repository owner's personal use, there are a lot of flaws in the app and is untested in a production environment. **To find bugs and further improvements, FEEDBACKS ARE NEEDED.** 
