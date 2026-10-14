@@ -1,4 +1,7 @@
 import os
+import sys
+import platform
+import tkinter as tk
 import customtkinter as ctk
 from tkinter import filedialog
 from media_controls.spotify_handler import Spotify_Handler
@@ -10,6 +13,15 @@ ctk.set_default_color_theme("blue")
 
 ACCENT = "#4caf50"
 MUTED = "#9a9a9a"
+
+# ---------------- OS checker ----------------
+OS_NAME = platform.system()  # "Linux", "Windows", "Darwin", ...
+IS_LINUX = OS_NAME == "Linux"
+IS_WINDOWS = OS_NAME == "Windows"
+
+# Project root (one level above src/), or the PyInstaller bundle dir when frozen
+_BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+LOGO_PATH = os.path.join(_BASE_DIR, "assets", "timer-logo.png")
 
 
 class Main:
@@ -30,7 +42,13 @@ class Main:
             # Make sure rest media never outlives the app
             self.root.protocol("WM_DELETE_WINDOW", self._on_close)
             #TITLE BAR
-            self._title_bar()
+            if IS_LINUX:
+                # Linux: hide the native title bar and draw our own (with the logo)
+                self.root.overrideredirect(True)
+                self._title_bar()
+            else:
+                # Windows (and others): keep the native title bar, just give it the logo
+                self._set_native_icon()
 
             # Home view (input + history). Swapped out for the timer view when running.
             self.home_frame = ctk.CTkFrame(self.root, fg_color="transparent")
@@ -159,12 +177,19 @@ class Main:
         timer_history_label.pack(anchor="w")
 
     def _title_bar(self):
+        """Custom title bar - only used on Linux, where the native one is disabled."""
         bar = ctk.CTkFrame(self.root, corner_radius=0, height=32)
         bar.pack(fill="x")
         bar.pack_propagate(False)
 
+        self._title_logo = self._load_logo(18)
+        if self._title_logo is not None:
+            logo = ctk.CTkLabel(bar, text="", image=self._title_logo, width=18)
+            logo.pack(side="left", padx=(10, 0))
+            self._make_draggable(logo)
+
         title = ctk.CTkLabel(bar, text="Pomodoro Timer", anchor="w")
-        title.pack(side="left", padx=10)
+        title.pack(side="left", padx=(6 if self._title_logo is not None else 10, 0))
 
         close = ctk.CTkButton(bar, text="X", width=32, height=22, corner_radius=4,
                               fg_color="transparent", hover_color="#e81123",
@@ -173,8 +198,68 @@ class Main:
 
         minimize = ctk.CTkButton(bar, text="-", width=32, height=22, corner_radius=4,
                                  fg_color="transparent", hover_color="#3c3c3c",
-                                 text_color="white", command=self.root.iconify)
+                                 text_color="white", command=self._minimize)
         minimize.pack(side="right", padx=(0, 2))
+
+        # Without a native title bar the window must be moved via our own bar
+        self._make_draggable(bar)
+        self._make_draggable(title)
+        # Borderless windows don't get keyboard focus automatically on X11
+        self.root.bind("<Button-1>", lambda e: self.root.focus_force(), add="+")
+        # Re-apply borderless mode when restored from the taskbar after minimizing
+        self.root.bind("<Map>", self._on_restore, add="+")
+
+    def _make_draggable(self, widget):
+        widget.bind("<ButtonPress-1>", self._start_drag, add="+")
+        widget.bind("<B1-Motion>", self._on_drag, add="+")
+
+    def _start_drag(self, event):
+        self._drag_x = event.x_root - self.root.winfo_x()
+        self._drag_y = event.y_root - self.root.winfo_y()
+
+    def _on_drag(self, event):
+        self.root.geometry(f"+{event.x_root - self._drag_x}+{event.y_root - self._drag_y}")
+
+    def _minimize(self):
+        # iconify() is ignored for overrideredirect windows, so temporarily
+        # hand the window back to the window manager to minimize it.
+        self.root.overrideredirect(False)
+        self.root.iconify()
+
+    def _on_restore(self, event=None):
+        if IS_LINUX and event is not None and event.widget is self.root \
+                and not self.root.overrideredirect():
+            self.root.after(10, lambda: self.root.overrideredirect(True))
+
+    def _set_native_icon(self):
+        """Native title bar (Windows): show the timer logo as the window/taskbar icon."""
+        if not os.path.exists(LOGO_PATH):
+            return
+        if IS_WINDOWS:
+            # Give the app its own taskbar identity so Windows shows our icon, not python.exe's
+            try:
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("pomodoro.timer")
+            except Exception:
+                pass
+        self._icon_image = tk.PhotoImage(file=LOGO_PATH)
+        self.root.iconphoto(True, self._icon_image)
+        # CustomTkinter swaps in its own default icon ~200ms after startup on Windows,
+        # so re-apply ours after that.
+        self.root.after(300, lambda: self.root.iconphoto(True, self._icon_image))
+
+    def _load_logo(self, size):
+        if not os.path.exists(LOGO_PATH):
+            return None
+        try:
+            from PIL import Image
+            img = Image.open(LOGO_PATH)
+            return ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
+        except ImportError:
+            # Pillow not installed - fall back to plain Tk image, scaled down by integer factor
+            img = tk.PhotoImage(file=LOGO_PATH)
+            factor = max(1, img.width() // size)
+            return img.subsample(factor, factor)
 
     # ---------------- Timer state ----------------
     def _read_int(self, entry) -> int:
