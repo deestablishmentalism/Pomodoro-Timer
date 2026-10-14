@@ -65,6 +65,32 @@ function Find-Python {
     return $null
 }
 
+# Wrap a PNG in a single-image .ico (PNG-compressed ICO entries are supported
+# since Windows Vista). Shortcuts and "Settings > Apps" can't use a .png directly.
+function Convert-PngToIco {
+    param([string]$PngPath, [string]$IcoPath)
+    $png = [IO.File]::ReadAllBytes($PngPath)
+    # Width/height are big-endian UInt32s in the IHDR chunk (offsets 16 and 20)
+    $w = [int]$png[18] * 256 + [int]$png[19]
+    $h = [int]$png[22] * 256 + [int]$png[23]
+    $fs = [IO.File]::Create($IcoPath)
+    $bw = New-Object IO.BinaryWriter($fs)
+    try {
+        $bw.Write([UInt16]0)                          # reserved
+        $bw.Write([UInt16]1)                          # type: icon
+        $bw.Write([UInt16]1)                          # image count
+        $bw.Write([byte]$(if ($w -ge 256) { 0 } else { $w }))   # 0 means 256
+        $bw.Write([byte]$(if ($h -ge 256) { 0 } else { $h }))
+        $bw.Write([byte]0)                            # palette colours
+        $bw.Write([byte]0)                            # reserved
+        $bw.Write([UInt16]1)                          # colour planes
+        $bw.Write([UInt16]32)                         # bits per pixel
+        $bw.Write([UInt32]$png.Length)                # image data size
+        $bw.Write([UInt32]22)                         # data offset (6 + 16)
+        $bw.Write($png)
+    } finally { $bw.Close() }
+}
+
 try {
     # ---------- 1. Python ----------
     Write-Step 'Checking Python...'
@@ -95,6 +121,10 @@ try {
     if (Test-Path $AppDir) { Remove-Item -Recurse -Force $AppDir }
     Copy-Item -Recurse -Path (Join-Path $RepoRoot 'src') -Destination $AppDir
     Get-ChildItem -Path $AppDir -Recurse -Directory -Filter '__pycache__' | Remove-Item -Recurse -Force
+    $AssetsDir = Join-Path $InstallDir 'assets'
+    if (Test-Path $AssetsDir) { Remove-Item -Recurse -Force $AssetsDir }
+    $RepoAssets = Join-Path $RepoRoot 'assets'
+    if (Test-Path $RepoAssets) { Copy-Item -Recurse -Path $RepoAssets -Destination $AssetsDir }
     Copy-Item (Join-Path $RepoRoot 'requirements.txt') (Join-Path $InstallDir 'requirements.txt') -Force
     Copy-Item (Join-Path $PSScriptRoot 'uninstall.ps1') (Join-Path $InstallDir 'uninstall.ps1') -Force
 
@@ -113,18 +143,25 @@ try {
     # ---------- 5. Shortcuts (pythonw = no console window) ----------
     Write-Step 'Creating shortcuts...'
     $MainPy = Join-Path $AppDir 'main.py'
-    $Icon = @((Join-Path $AppDir 'assets\timer-logo.png'), (Join-Path $AppDir 'timer-logo.png')) |
+    $Png = @((Join-Path $AssetsDir 'timer-logo.png'), (Join-Path $AppDir 'assets\timer-logo.png')) |
             Where-Object { Test-Path $_ } | Select-Object -First 1
+    $Icon = $null
+    if ($Png) {
+        $IcoPath = Join-Path $InstallDir 'timer-logo.ico'
+        Convert-PngToIco $Png $IcoPath
+        $Icon = $IcoPath
+    }
     $shell = New-Object -ComObject WScript.Shell
     $targets = @($StartMenuLnk)
     if (-not $NoDesktopShortcut) { $targets += $DesktopLnk }
     foreach ($lnkPath in $targets) {
+        if (Test-Path $lnkPath) { Remove-Item -Force $lnkPath }   # avoid stale cached icon
         $lnk = $shell.CreateShortcut($lnkPath)
         $lnk.TargetPath       = $VenvPyw
         $lnk.Arguments        = "`"$MainPy`""
         $lnk.WorkingDirectory = $AppDir
         $lnk.Description      = $AppName
-        if ($Icon) { $lnk.IconLocation = $Icon }
+        if ($Icon) { $lnk.IconLocation = "$Icon,0" }
         $lnk.Save()
     }
 

@@ -119,6 +119,8 @@ mkdir -p "$APP_DIR"
 rm -rf "$APP_DIR/app"
 cp -r "$REPO_ROOT/src" "$APP_DIR/app"
 find "$APP_DIR/app" -name '__pycache__' -type d -prune -exec rm -rf {} +
+rm -rf "$APP_DIR/assets"
+[ -d "$REPO_ROOT/assets" ] && cp -r "$REPO_ROOT/assets" "$APP_DIR/assets"
 cp "$REPO_ROOT/requirements.txt" "$APP_DIR/requirements.txt"
 cp "$SCRIPT_DIR/uninstall.sh" "$APP_DIR/uninstall.sh"
 chmod +x "$APP_DIR/uninstall.sh"
@@ -147,7 +149,7 @@ chmod +x "$LAUNCHER"
 # ---------- 7. Desktop entry ----------
 info "Creating app-menu entry"
 ICON="appointment-soon"
-for candidate in "$APP_DIR/app/assets/timer-logo.png" "$APP_DIR/app/timer-logo.png"; do
+for candidate in "$APP_DIR/assets/timer-logo.png" "$APP_DIR/app/assets/timer-logo.png"; do
     [ -f "$candidate" ] && { ICON="$candidate"; break; }
 done
 mkdir -p "$(dirname "$DESKTOP_FILE")"
