@@ -61,7 +61,7 @@ Both installers install for the current user only and need **no admin rights** f
 
 ### Linux
 ```bash
-git clone <https://github.com/deestablishmentalism/Pomodoro-Timer.git> pomodoro-timer
+git clone https://github.com/deestablishmentalism/Pomodoro-Timer.git pomodoro-timer
 cd pomodoro-timer
 chmod +x installer/linux/*.sh
 ./installer/linux/install.sh            # add --yes to accept all prompts
