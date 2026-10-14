@@ -147,7 +147,7 @@ chmod +x "$LAUNCHER"
 # ---------- 7. Desktop entry ----------
 info "Creating app-menu entry"
 ICON="appointment-soon"
-for candidate in "$APP_DIR/app/assets/icon.png" "$APP_DIR/app/icon.png"; do
+for candidate in "$APP_DIR/app/assets/timer-logo.png" "$APP_DIR/app/timer-logo.png"; do
     [ -f "$candidate" ] && { ICON="$candidate"; break; }
 done
 mkdir -p "$(dirname "$DESKTOP_FILE")"

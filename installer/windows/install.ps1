@@ -113,7 +113,7 @@ try {
     # ---------- 5. Shortcuts (pythonw = no console window) ----------
     Write-Step 'Creating shortcuts...'
     $MainPy = Join-Path $AppDir 'main.py'
-    $Icon = @((Join-Path $AppDir 'assets\icon.ico'), (Join-Path $AppDir 'icon.ico')) |
+    $Icon = @((Join-Path $AppDir 'assets\timer-logo.png'), (Join-Path $AppDir 'timer-logo.png')) |
             Where-Object { Test-Path $_ } | Select-Object -First 1
     $shell = New-Object -ComObject WScript.Shell
     $targets = @($StartMenuLnk)
