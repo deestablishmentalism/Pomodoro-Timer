@@ -55,10 +55,6 @@ class Main:
             #TITLE BAR
             # Window/taskbar icon (also used on Linux while minimized / in the dock)
             self._set_native_icon()
-            if IS_LINUX:
-                # Linux: hide the native title bar and draw our own (with the logo)
-                self.root.overrideredirect(True)
-                self._title_bar()
 
             # Home view (input + history). Swapped out for the timer view when running.
             self.home_frame = ctk.CTkFrame(self.root, fg_color="transparent")
