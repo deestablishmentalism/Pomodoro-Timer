@@ -4,6 +4,7 @@ import platform
 import tkinter as tk
 import customtkinter as ctk
 from tkinter import filedialog
+from utils.paths import get_resource_path, restore_child_environment
 from media_controls.spotify_handler import Spotify_Handler
 from media_controls.rest_media_handler import RestMediaHandler
 from ui.timer_view import TimerView
@@ -19,9 +20,12 @@ OS_NAME = platform.system()  # "Linux", "Windows", "Darwin", ...
 IS_LINUX = OS_NAME == "Linux"
 IS_WINDOWS = OS_NAME == "Windows"
 
-# Project root (one level above src/), or the PyInstaller bundle dir when frozen
-_BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-LOGO_PATH = os.path.join(_BASE_DIR, "assets", "timer-logo.png")
+# Assets live in <project root>/assets from source, or inside the PyInstaller bundle when frozen
+LOGO_PATH = get_resource_path("assets/timer-logo.png")
+ICO_PATH = get_resource_path("assets/timer-logo.ico")
+
+# Frozen builds: make sure spawned tools (playerctl, mpv, vlc, ...) use the host's libraries
+restore_child_environment()
 
 
 class Main:
@@ -42,13 +46,12 @@ class Main:
             # Make sure rest media never outlives the app
             self.root.protocol("WM_DELETE_WINDOW", self._on_close)
             #TITLE BAR
+            # Window/taskbar icon (also used on Linux while minimized / in the dock)
+            self._set_native_icon()
             if IS_LINUX:
                 # Linux: hide the native title bar and draw our own (with the logo)
                 self.root.overrideredirect(True)
                 self._title_bar()
-            else:
-                # Windows (and others): keep the native title bar, just give it the logo
-                self._set_native_icon()
 
             # Home view (input + history). Swapped out for the timer view when running.
             self.home_frame = ctk.CTkFrame(self.root, fg_color="transparent")
@@ -232,9 +235,7 @@ class Main:
             self.root.after(10, lambda: self.root.overrideredirect(True))
 
     def _set_native_icon(self):
-        """Native title bar (Windows): show the timer logo as the window/taskbar icon."""
-        if not os.path.exists(LOGO_PATH):
-            return
+        """Show the timer logo as the window/taskbar icon (.ico on Windows, .png elsewhere)."""
         if IS_WINDOWS:
             # Give the app its own taskbar identity so Windows shows our icon, not python.exe's
             try:
@@ -242,8 +243,21 @@ class Main:
                 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("pomodoro.timer")
             except Exception:
                 pass
-        self._icon_image = tk.PhotoImage(file=LOGO_PATH)
-        self.root.iconphoto(True, self._icon_image)
+            if os.path.exists(ICO_PATH):
+                try:
+                    # Multi-resolution .ico looks crisp in title bar, taskbar and Alt+Tab.
+                    # Calling iconbitmap also stops CustomTkinter from swapping in its own icon.
+                    self.root.iconbitmap(default=ICO_PATH)
+                    return
+                except Exception:
+                    pass
+        if not os.path.exists(LOGO_PATH):
+            return
+        try:
+            self._icon_image = tk.PhotoImage(file=LOGO_PATH)
+            self.root.iconphoto(True, self._icon_image)
+        except Exception:
+            return
         # CustomTkinter swaps in its own default icon ~200ms after startup on Windows,
         # so re-apply ours after that.
         self.root.after(300, lambda: self.root.iconphoto(True, self._icon_image))
