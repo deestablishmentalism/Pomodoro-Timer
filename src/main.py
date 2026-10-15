@@ -1,5 +1,12 @@
 import os
 import sys
+
+# `pomodoro-timer --self-test`: verify the (packaged) app's imports and data files, then exit.
+# Must run before the imports below so a missing module is reported instead of crashing.
+if __name__ == "__main__" and "--self-test" in sys.argv:
+    from utils.self_test import run as _run_self_test
+    sys.exit(_run_self_test())
+
 import platform
 import tkinter as tk
 import customtkinter as ctk
