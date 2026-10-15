@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 # Pomodoro Timer - Linux installer (per-user, no root needed for the app itself)
 #
+# Two modes:
+#   binary  Installs a pre-built standalone build - NO Python, tkinter, pip or venv needed.
+#           Used automatically when ./pomodoro-timer/pomodoro-timer (release tarball)
+#           or <repo>/dist/pomodoro-timer/pomodoro-timer (local build) exists.
+#   source  Builds from source: private virtualenv + pip install (needs Python 3.8+).
+#
 # Installs to:
-#   ~/.local/share/pomodoro-timer/        app code + private virtualenv
+#   ~/.local/share/pomodoro-timer/        app (binary build, or code + private virtualenv)
 #   ~/.local/bin/pomodoro-timer           launcher command
 #   ~/.local/share/applications/pomodoro-timer.desktop   app-menu entry
 #
-# Usage: ./install.sh [--yes]     (--yes = answer "yes" to every prompt)
+# Usage: ./install.sh [--yes] [--binary | --source]
+#   --yes     answer "yes" to every prompt
+#   --binary  require the pre-built binary mode
+#   --source  force the build-from-source (virtualenv) mode
 set -euo pipefail
 
 APP_ID="pomodoro-timer"
@@ -21,10 +30,13 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 MIN_PY_MINOR=8   # Python 3.8+
 
 ASSUME_YES=0
+MODE=auto
 for arg in "$@"; do
     case "$arg" in
         -y|--yes) ASSUME_YES=1 ;;
-        -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+        --binary) MODE=binary ;;
+        --source) MODE=source ;;
+        -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
         *) echo "Unknown option: $arg" >&2; exit 2 ;;
     esac
 done
@@ -74,26 +86,48 @@ pm_install() {
     esac
 }
 
-# ---------- 1. Python ----------
-info "Checking Python..."
-PYTHON="$(command -v python3 || true)"
-[ -n "$PYTHON" ] || die "python3 not found. Install Python 3.$MIN_PY_MINOR+ and re-run."
-"$PYTHON" -c "import sys; sys.exit(0 if sys.version_info >= (3, $MIN_PY_MINOR) else 1)" \
-    || die "Python 3.$MIN_PY_MINOR+ required (found $("$PYTHON" --version 2>&1))."
-echo "    $("$PYTHON" --version 2>&1) at $PYTHON"
+# ---------- 0. Install mode ----------
+# A pre-built standalone build: next to this script (release tarball) or in <repo>/dist (local build)
+BINARY_SRC=""
+for candidate in "$SCRIPT_DIR/pomodoro-timer" "$REPO_ROOT/dist/pomodoro-timer"; do
+    if [ -f "$candidate/pomodoro-timer" ] && [ -x "$candidate/pomodoro-timer" ]; then
+        BINARY_SRC="$candidate"; break
+    fi
+done
+case "$MODE" in
+    auto)   if [ -n "$BINARY_SRC" ]; then MODE=binary; else MODE=source; fi ;;
+    binary) [ -n "$BINARY_SRC" ] || die "No pre-built binary found (expected ./pomodoro-timer/pomodoro-timer).
+       Download pomodoro-timer-linux-x86_64.tar.gz from the Releases page, or use --source." ;;
+    source) [ -f "$REPO_ROOT/src/main.py" ] || die "Source code not found at $REPO_ROOT/src - use --binary." ;;
+esac
+if [ "$MODE" = binary ]; then
+    info "Installing pre-built binary from $BINARY_SRC (no Python required)"
+else
+    info "Installing from source (Python virtualenv)"
+fi
 
-# ---------- 2. Required system packages (tkinter, venv) ----------
-missing=()
-"$PYTHON" -c "import tkinter" 2>/dev/null || missing+=("$(pkg_name tk)")
-"$PYTHON" -c "import ensurepip, venv" 2>/dev/null || {
-    p="$(pkg_name venv)"; [ -n "$p" ] && missing+=("$p")
-}
-if [ ${#missing[@]} -gt 0 ]; then
-    warn "Missing required system packages: ${missing[*]}"
-    if [ -n "$PM" ] && confirm "Install them now with $PM (needs sudo)?"; then
-        pm_install "${missing[@]}" || die "Failed to install ${missing[*]}"
-    else
-        die "Please install: ${missing[*]} and re-run this installer."
+if [ "$MODE" = source ]; then
+    # ---------- 1. Python ----------
+    info "Checking Python..."
+    PYTHON="$(command -v python3 || true)"
+    [ -n "$PYTHON" ] || die "python3 not found. Install Python 3.$MIN_PY_MINOR+ and re-run (or use a pre-built release)."
+    "$PYTHON" -c "import sys; sys.exit(0 if sys.version_info >= (3, $MIN_PY_MINOR) else 1)" \
+        || die "Python 3.$MIN_PY_MINOR+ required (found $("$PYTHON" --version 2>&1))."
+    echo "    $("$PYTHON" --version 2>&1) at $PYTHON"
+
+    # ---------- 2. Required system packages (tkinter, venv) ----------
+    missing=()
+    "$PYTHON" -c "import tkinter" 2>/dev/null || missing+=("$(pkg_name tk)")
+    "$PYTHON" -c "import ensurepip, venv" 2>/dev/null || {
+        p="$(pkg_name venv)"; [ -n "$p" ] && missing+=("$p")
+    }
+    if [ ${#missing[@]} -gt 0 ]; then
+        warn "Missing required system packages: ${missing[*]}"
+        if [ -n "$PM" ] && confirm "Install them now with $PM (needs sudo)?"; then
+            pm_install "${missing[@]}" || die "Failed to install ${missing[*]}"
+        else
+            die "Please install: ${missing[*]} and re-run this installer."
+        fi
     fi
 fi
 
@@ -116,40 +150,64 @@ fi
 # ---------- 4. Copy app ----------
 info "Installing app to $APP_DIR"
 mkdir -p "$APP_DIR"
-rm -rf "$APP_DIR/app"
-cp -r "$REPO_ROOT/src" "$APP_DIR/app"
-find "$APP_DIR/app" -name '__pycache__' -type d -prune -exec rm -rf {} +
-rm -rf "$APP_DIR/assets"
-[ -d "$REPO_ROOT/assets" ] && cp -r "$REPO_ROOT/assets" "$APP_DIR/assets"
-cp "$REPO_ROOT/requirements.txt" "$APP_DIR/requirements.txt"
+# Close a running copy so its files can be replaced
+for pattern in "$APP_DIR/bin/pomodoro-timer" "$APP_DIR/app/main.py"; do
+    pkill -f "$pattern" >/dev/null 2>&1 || true
+done
+rm -rf "$APP_DIR/app" "$APP_DIR/bin" "$APP_DIR/assets"
+mkdir -p "$APP_DIR/assets"
+if [ "$MODE" = binary ]; then
+    cp -a "$BINARY_SRC" "$APP_DIR/bin"
+    chmod +x "$APP_DIR/bin/pomodoro-timer"
+    # A previous source install's virtualenv is no longer needed
+    rm -rf "$APP_DIR/venv" "$APP_DIR/requirements.txt"
+    # PyInstaller 6 keeps data files in _internal/, older versions next to the executable
+    for assets in "$APP_DIR/bin/_internal/assets" "$APP_DIR/bin/assets" "$REPO_ROOT/assets"; do
+        [ -d "$assets" ] && { cp -r "$assets/." "$APP_DIR/assets/"; break; }
+    done
+else
+    cp -r "$REPO_ROOT/src" "$APP_DIR/app"
+    find "$APP_DIR/app" -name '__pycache__' -type d -prune -exec rm -rf {} +
+    [ -d "$REPO_ROOT/assets" ] && cp -r "$REPO_ROOT/assets/." "$APP_DIR/assets/"
+    cp "$REPO_ROOT/requirements.txt" "$APP_DIR/requirements.txt"
+fi
 cp "$SCRIPT_DIR/uninstall.sh" "$APP_DIR/uninstall.sh"
 chmod +x "$APP_DIR/uninstall.sh"
 
-# ---------- 5. Virtualenv + Python deps ----------
-VENV="$APP_DIR/venv"
-if [ ! -x "$VENV/bin/python" ] || ! "$VENV/bin/python" -c "import sys" 2>/dev/null; then
-    info "Creating virtual environment..."
-    rm -rf "$VENV"
-    "$PYTHON" -m venv "$VENV"
+# ---------- 5. Virtualenv + Python deps (source mode only) ----------
+if [ "$MODE" = source ]; then
+    VENV="$APP_DIR/venv"
+    if [ ! -x "$VENV/bin/python" ] || ! "$VENV/bin/python" -c "import sys" 2>/dev/null; then
+        info "Creating virtual environment..."
+        rm -rf "$VENV"
+        "$PYTHON" -m venv "$VENV"
+    fi
+    info "Installing Python dependencies..."
+    "$VENV/bin/python" -m pip install --upgrade pip --quiet
+    "$VENV/bin/python" -m pip install -r "$APP_DIR/requirements.txt" --quiet
 fi
-info "Installing Python dependencies..."
-"$VENV/bin/python" -m pip install --upgrade pip --quiet
-"$VENV/bin/python" -m pip install -r "$APP_DIR/requirements.txt" --quiet
 
 # ---------- 6. Launcher ----------
 info "Creating launcher $LAUNCHER"
 mkdir -p "$BIN_DIR"
-cat > "$LAUNCHER" <<EOF
+if [ "$MODE" = binary ]; then
+    cat > "$LAUNCHER" <<EOF
+#!/usr/bin/env bash
+exec "$APP_DIR/bin/pomodoro-timer" "\$@"
+EOF
+else
+    cat > "$LAUNCHER" <<EOF
 #!/usr/bin/env bash
 cd "$APP_DIR/app"
 exec "$VENV/bin/python" "$APP_DIR/app/main.py" "\$@"
 EOF
+fi
 chmod +x "$LAUNCHER"
 
 # ---------- 7. Desktop entry ----------
 info "Creating app-menu entry"
 ICON="appointment-soon"
-for candidate in "$APP_DIR/assets/timer-logo.png" "$APP_DIR/app/assets/timer-logo.png"; do
+for candidate in "$APP_DIR/assets/timer-logo-256.png" "$APP_DIR/assets/timer-logo.png"; do
     [ -f "$candidate" ] && { ICON="$candidate"; break; }
 done
 mkdir -p "$(dirname "$DESKTOP_FILE")"

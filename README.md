@@ -33,7 +33,26 @@ Set your focus time, number of cycles and rest length. During rest intervals the
 
 ---
 
+## Pre-built Downloads (No Python Required)
+
+Grab the latest build from the [Releases page](https://github.com/deestablishmentalism/Pomodoro-Timer/releases). These are self-contained: **Python, Tkinter, pip and virtual environments are NOT needed** on your machine.
+
+| OS | File | How to use |
+|---|---|---|
+| **Linux** | `PomodoroTimer-x86_64.AppImage` | `chmod +x PomodoroTimer-x86_64.AppImage && ./PomodoroTimer-x86_64.AppImage`. Single file, runs on most distros, nothing to install |
+| **Linux** | `pomodoro-timer-linux-x86_64.tar.gz` | Extract, then run `./install.sh` (adds an app-menu entry and the `pomodoro-timer` command), or run `./pomodoro-timer/pomodoro-timer` directly |
+| **Windows** | `PomodoroTimer-Setup-<version>.exe` | Double-click the setup wizard. Installs per-user (no admin), adds Start Menu/Desktop shortcuts and an entry in **Settings > Apps** |
+| **Windows** | `pomodoro-timer-windows-x64.zip` | Portable: extract and run `pomodoro-timer\pomodoro-timer.exe`, or double-click `install.bat` to add shortcuts |
+
+The [optional tools](#optional) below (Spotify control, rest media players) still apply.
+
+> Windows SmartScreen may warn about an unrecognised app because the builds are not code-signed. Click **More info → Run anyway**.
+
+---
+
 ## Requirements
+
+These are needed only to **run or install from source**. The pre-built downloads above need only the optional tools.
 
 ### Required
 | | Linux | Windows |
@@ -55,9 +74,15 @@ Python packages (installed automatically, see [requirements.txt](requirements.tx
 
 ---
 
-## Installation
+## Installation (from source)
 
-Both installers install for the current user only and need **no admin rights** for the app itself. Each one creates a private Python virtual environment, so your system Python is not touched. Running an installer again updates an existing install.**Before following the steps below, make sure that the repository is already downloaded--refer to the instructions below to successfully download the repository.**
+> Just want to use the app? Use the [pre-built downloads](#pre-built-downloads-no-python-required) instead, no Python required.
+
+Both installers install for the current user only and need **no admin rights** for the app itself. Running an installer again updates an existing install. They work in two modes:
+- **Binary mode (no Python):** used automatically when a pre-built build is present, i.e. inside an extracted release archive, or after you [built the packages yourself](#building-the-standalone-packages) (`dist/pomodoro-timer/`). Force it with `--binary` (Linux) / `-Binary` (Windows).
+- **Source mode:** creates a private Python virtual environment, so your system Python is not touched. Force it with `--source` / `-Source`.
+
+**Before following the steps below, make sure that the repository is already downloaded--refer to the instructions below to successfully download the repository.**
 
 ### VIA Downloading the zip file
 
@@ -147,19 +172,52 @@ The uninstallers remove the app folder, the launcher and shortcuts, and the menu
 
 ---
 
+## Building the standalone packages
+
+Packages are built with [PyInstaller](https://pyinstaller.org) and must be built **on the target OS** (no cross-compiling). Pushing a tag like `v1.0.0` makes [GitHub Actions](.github/workflows/package.yml) build everything on Linux and Windows and publish a GitHub Release.
+
+To build locally:
+
+**Linux:** produces the AppImage and the portable tarball in `dist/`
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+packaging/linux/build_linux.sh            # --no-appimage to skip the AppImage
+```
+
+**Windows:** produces the portable ZIP and, if [Inno Setup 6](https://jrsoftware.org/isinfo.php) is installed, the setup wizard in `dist\`
+```powershell
+py -3 -m venv .venv; .venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+powershell -ExecutionPolicy Bypass -File packaging\windows\build_windows.ps1 -Version 1.0.0
+```
+
+The icons in `assets/` (`timer-logo.ico`, `timer-logo-256.png`) are generated from `timer-logo.png` with `python packaging/make_icons.py`.
+
+---
+
 ## Project structure
 ```
 pomodoro-timer/
 ├── src/
 │   ├── main.py                       # App window, timer setup form, rest-media picker
 │   ├── ui/timer_view.py              # Running-timer UI and focus/rest state machine
+│   ├── utils/paths.py                # Resource paths (source and PyInstaller bundle)
 │   └── media_controls/
 │       ├── spotify_handler.py        # State-aware Spotify pause/resume
 │       └── rest_media_handler.py     # Random, no-repeat rest-interval media playback
+├── assets/                           # Logo (.png, 256px .png, multi-size .ico)
 ├── installer/
 │   ├── linux/   install.sh, uninstall.sh
 │   └── windows/ install.bat, install.ps1, uninstall.bat, uninstall.ps1
+├── packaging/
+│   ├── make_icons.py                 # Generates the .ico / 256px icon
+│   ├── linux/   build_linux.sh, build_appimage.sh
+│   └── windows/ build_windows.ps1, setup.iss (Inno Setup)
+├── pomodoro-timer.spec               # PyInstaller build configuration
+├── .github/workflows/package.yml     # CI: builds and releases packages
 ├── requirements.txt
+├── requirements-dev.txt              # + PyInstaller (build only)
 └── run.sh                            # Quick run from source (Linux)
 ```
 ## Final Notes

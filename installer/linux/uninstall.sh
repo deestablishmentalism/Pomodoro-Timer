@@ -36,12 +36,14 @@ if [ "$ASSUME_YES" -ne 1 ]; then
     [[ "$reply" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
 fi
 
-# Close the app if it is running (so no files are in use)
-if pgrep -f "$APP_DIR/app/main.py" >/dev/null 2>&1; then
-    info "Closing running $APP_NAME..."
-    pkill -f "$APP_DIR/app/main.py" || true
-    sleep 1
-fi
+# Close the app if it is running (so no files are in use) - binary build or source install
+for pattern in "$APP_DIR/bin/pomodoro-timer" "$APP_DIR/app/main.py"; do
+    if pgrep -f "$pattern" >/dev/null 2>&1; then
+        info "Closing running $APP_NAME..."
+        pkill -f "$pattern" || true
+        sleep 1
+    fi
+done
 
 # Leave the install dir before deleting it (this script may live inside it)
 cd "$HOME"

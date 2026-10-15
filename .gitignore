@@ -1,2 +1,7 @@
 run.sh
 PACKAGING_PLAN.txt
+# Packaging outputs
+build/
+dist/
+*.AppImage
+__pycache__/

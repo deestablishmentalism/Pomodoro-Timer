@@ -1,0 +1,123 @@
+name: Package
+
+# Builds standalone (no-Python-required) packages for Linux and Windows.
+# - Push a tag like v1.2.3  -> builds and publishes a GitHub Release with all artifacts
+# - Manual run / PR          -> builds and uploads artifacts to the workflow run only
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "src/**"
+      - "assets/**"
+      - "packaging/**"
+      - "installer/**"
+      - "pomodoro-timer.spec"
+      - "requirements*.txt"
+      - ".github/workflows/package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  linux:
+    # Build on the oldest supported Ubuntu so the binaries run on older glibc versions too
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Build PyInstaller bundle, tarball and AppImage
+        run: |
+          chmod +x packaging/linux/*.sh installer/linux/*.sh
+          packaging/linux/build_linux.sh --python python
+
+      - name: Smoke test (bundle starts and imports cleanly)
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb
+          # The GUI never exits on its own: success = still running after 10s without crashing
+          set +e
+          timeout 10 xvfb-run -a dist/pomodoro-timer/pomodoro-timer
+          code=$?
+          if [ "$code" -ne 124 ]; then echo "App exited early with code $code"; exit 1; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            dist/PomodoroTimer-*.AppImage
+            dist/pomodoro-timer-linux-*.tar.gz
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build PyInstaller bundle, portable ZIP and installer
+        shell: pwsh
+        run: |
+          $version = '1.0.0'
+          if ($env:GITHUB_REF_TYPE -eq 'tag') { $version = $env:GITHUB_REF_NAME.TrimStart('v') }
+          ./packaging/windows/build_windows.ps1 -Python python -Version $version
+
+      - name: Smoke test (bundle starts and stays up)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\pomodoro-timer\pomodoro-timer.exe -PassThru
+          Start-Sleep -Seconds 10
+          if ($p.HasExited) { throw "App exited early with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: |
+            dist/PomodoroTimer-Setup-*.exe
+            dist/pomodoro-timer-windows-*.zip
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+
