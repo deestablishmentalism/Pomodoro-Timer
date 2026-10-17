@@ -9,6 +9,7 @@ on:
   pull_request:
     paths:
       - "src/**"
+      - "tests/**"
       - "assets/**"
       - "packaging/**"
       - "installer/**"
@@ -41,6 +42,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
+      - name: Test database creation and insertion (mock)
+        run: python -m unittest discover -s tests -v
+
       - name: Build PyInstaller bundle, tarball and AppImage
         run: |
           chmod +x packaging/linux/*.sh installer/linux/*.sh
@@ -48,6 +52,7 @@ jobs:
 
       - name: Smoke test (bundle starts and imports cleanly)
         run: |
+          dist/pomodoro-timer/pomodoro-timer --self-test
           sudo apt-get update && sudo apt-get install -y xvfb
           # The GUI never exits on its own: success = still running after 10s without crashing
           set +e
@@ -79,6 +84,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
+      - name: Test database creation and insertion (mock)
+        run: python -m unittest discover -s tests -v
+
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
@@ -92,6 +100,8 @@ jobs:
       - name: Smoke test (bundle starts and stays up)
         shell: pwsh
         run: |
+          $selfTest = Start-Process -FilePath dist\pomodoro-timer\pomodoro-timer.exe -ArgumentList '--self-test' -Wait -PassThru
+          if ($selfTest.ExitCode -ne 0) { throw "Self-test failed with exit code $($selfTest.ExitCode)" }
           $p = Start-Process -FilePath dist\pomodoro-timer\pomodoro-timer.exe -PassThru
           Start-Sleep -Seconds 10
           if ($p.HasExited) { throw "App exited early with code $($p.ExitCode)" }

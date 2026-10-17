@@ -10,6 +10,8 @@ APP_ID="pomodoro-timer"
 APP_NAME="Pomodoro Timer"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 APP_DIR="$DATA_HOME/$APP_ID"
+DB_DIR="$DATA_HOME/$APP_NAME"
+DB_FILE="$DB_DIR/app.db"
 LAUNCHER="$HOME/.local/bin/$APP_ID"
 DESKTOP_FILE="$DATA_HOME/applications/$APP_ID.desktop"
 
@@ -24,14 +26,14 @@ done
 
 info() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 
-if [ ! -e "$APP_DIR" ] && [ ! -e "$LAUNCHER" ] && [ ! -e "$DESKTOP_FILE" ]; then
+if [ ! -e "$APP_DIR" ] && [ ! -e "$DB_DIR" ] && [ ! -e "$LAUNCHER" ] && [ ! -e "$DESKTOP_FILE" ]; then
     echo "$APP_NAME does not appear to be installed."
     exit 0
 fi
 
 if [ "$ASSUME_YES" -ne 1 ]; then
     echo "This will remove:"
-    for p in "$APP_DIR" "$LAUNCHER" "$DESKTOP_FILE"; do [ -e "$p" ] && echo "    $p"; done
+    for p in "$APP_DIR" "$DB_FILE" "$DB_DIR" "$LAUNCHER" "$DESKTOP_FILE"; do [ -e "$p" ] && echo "    $p"; done
     read -r -p "Continue? [y/N] " reply
     [[ "$reply" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
 fi
@@ -49,8 +51,8 @@ done
 cd "$HOME"
 
 info "Removing files..."
-rm -f "$LAUNCHER" "$DESKTOP_FILE"
-rm -rf "$APP_DIR"
+rm -f "$LAUNCHER" "$DESKTOP_FILE" "$DB_FILE"
+rm -rf "$APP_DIR" "$DB_DIR"
 command -v update-desktop-database >/dev/null 2>&1 \
     && update-desktop-database "$(dirname "$DESKTOP_FILE")" >/dev/null 2>&1 || true
 

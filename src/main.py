@@ -14,6 +14,7 @@ from tkinter import filedialog
 from utils.paths import get_resource_path, restore_child_environment
 from media_controls.spotify_handler import Spotify_Handler
 from media_controls.rest_media_handler import RestMediaHandler
+from database.db_handler import Db_Handler
 from ui.timer_view import TimerView
 from threading import Thread
 ctk.set_appearance_mode("dark")
@@ -44,6 +45,7 @@ class Main:
         self.should_continue = True
         self.spotify_handler = Spotify_Handler(continue_checker=self.should_continue)
         self.rest_media = RestMediaHandler()
+        self.db_handler = Db_Handler()
 
     def start(self):
         try:
@@ -180,7 +182,80 @@ class Main:
         inner = ctk.CTkFrame(history_section, fg_color="transparent")
         inner.pack(fill="both", expand=True, padx=15, pady=15)
         timer_history_label = ctk.CTkLabel(inner, text="Timer History", font=("", 16, "bold"), anchor="w")
-        timer_history_label.pack(anchor="w")
+        timer_history_label.pack(anchor="w", pady=(0, 5))
+
+        self.history_list_frame = ctk.CTkScrollableFrame(inner, fg_color="transparent")
+        self.history_list_frame.pack(fill="both", expand=True)
+        self._render_history()
+
+    def _render_history(self):
+        for widget in self.history_list_frame.winfo_children():
+            widget.destroy()
+
+        rows = self.db_handler.get_timer_history()
+        if not rows:
+            ctk.CTkLabel(
+                self.history_list_frame,
+                text="No timer history yet",
+                text_color=MUTED,
+                anchor="w",
+            ).pack(anchor="w", pady=5)
+            return
+
+        for record_id, work_duration, rest_duration, cycles, rest_media_dir in rows:
+            item_frame = ctk.CTkFrame(
+                self.history_list_frame,
+                corner_radius=10,
+                border_width=1,
+                border_color="gray",
+            )
+            item_frame.pack(fill="x", pady=4, padx=2)
+            item_frame.grid_columnconfigure(0, weight=1)
+
+            info_frame = ctk.CTkFrame(item_frame, fg_color="transparent")
+            info_frame.grid(row=0, column=0, sticky="ew", padx=(10, 5), pady=8)
+
+            total = (work_duration + rest_duration) * cycles
+            h, m = divmod(total, 60)
+            summary_text = (
+                f"{cycles} x ({work_duration} min focus + {rest_duration} min rest)  =  {h}h {m:02d}m total"
+            )
+            media_text = f"Rest media: {rest_media_dir if rest_media_dir else 'None'}"
+
+            ctk.CTkLabel(
+                info_frame,
+                text=summary_text,
+                font=("", 12, "bold"),
+                anchor="w",
+                justify="left",
+            ).pack(fill="x", anchor="w")
+
+            ctk.CTkLabel(
+                info_frame,
+                text=media_text,
+                text_color=MUTED,
+                font=("", 11),
+                anchor="w",
+                justify="left",
+                wraplength=310,
+            ).pack(fill="x", anchor="w", pady=(2, 0))
+
+            delete_btn = ctk.CTkButton(
+                item_frame,
+                text="X",
+                width=28,
+                height=28,
+                corner_radius=6,
+                fg_color="transparent",
+                hover_color="#e81123",
+                text_color="white",
+                command=lambda rid=record_id: self._delete_history(rid),
+            )
+            delete_btn.grid(row=0, column=1, padx=(5, 10), pady=8)
+
+    def _delete_history(self, record_id):
+        self.db_handler.delete_timer_history(record_id)
+        self._render_history()
 
     def _title_bar(self):
         """Custom title bar - only used on Linux, where the native one is disabled."""
@@ -316,6 +391,7 @@ class Main:
             on_stop=self._stop_timer,
             rest_media=self.rest_media,
             spotify=self.spotify_handler,
+            db_handler=self.db_handler,
         )
         self.timer_view.pack(fill="both", expand=True)
         self.timer_view.start()
@@ -324,6 +400,7 @@ class Main:
         if self.timer_view is not None:
             self.timer_view.destroy()
             self.timer_view = None
+        self._render_history()
         self.home_frame.pack(fill="both", expand=True)
 
 

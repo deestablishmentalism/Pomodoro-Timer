@@ -52,6 +52,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; Remove files from an older version (stale DLLs/modules) before copying the new build
 Type: filesandordirs; Name: "{app}\_internal"
 
+[UninstallDelete]
+; Remove the SQLite database file and directory created at runtime in %LOCALAPPDATA%\Pomodoro Timer
+Type: files; Name: "{localappdata}\{#MyAppName}\{#MyAppName}\app.db"
+Type: files; Name: "{localappdata}\{#MyAppName}\app.db"
+Type: filesandordirs; Name: "{localappdata}\{#MyAppName}"
+
 [Files]
 Source: "..\..\dist\pomodoro-timer\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 

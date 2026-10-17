@@ -21,7 +21,7 @@ class TimerView(ctk.CTkFrame):
     """
 
     def __init__(self, master, cycle_seconds, cycles, rest_seconds, on_stop=None, rest_media=None,
-                 spotify=None, **kwargs):
+                 spotify=None, db_handler=None, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         self.cycle_seconds = cycle_seconds
         self.cycles = cycles
@@ -29,6 +29,7 @@ class TimerView(ctk.CTkFrame):
         self.on_stop = on_stop
         self.rest_media = rest_media  # started on REST, stopped on any other phase
         self.spotify = spotify  # paused on REST (if playing), resumed when REST ends
+        self.db_handler = db_handler
 
         self.phase = "work"  # "work", "rest" or "done"
         self.cycle = 1
@@ -119,6 +120,14 @@ class TimerView(ctk.CTkFrame):
             self.progress.set(1)
             self._update_dots()
             self.bell()
+            if self.db_handler is not None:
+                media_dir = self.rest_media.directory if self.rest_media is not None else None
+                self.db_handler.insert_timer_history(
+                    work_duration=self.cycle_seconds // 60,
+                    rest_duration=self.rest_seconds // 60,
+                    cycles=self.cycles,
+                    rest_media_directory=media_dir,
+                )
             return
 
         self.cycle_label.configure(text=f"Cycle {self.cycle} of {self.cycles}")

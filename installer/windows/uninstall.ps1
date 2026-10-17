@@ -18,13 +18,15 @@ $ErrorActionPreference = 'Stop'
 $AppName      = 'Pomodoro Timer'
 $AppId        = 'PomodoroTimer'
 $InstallDir   = Join-Path $env:LOCALAPPDATA $AppId
+$DbDir        = Join-Path $env:LOCALAPPDATA $AppName
+$DbFile       = if (Test-Path (Join-Path $DbDir "$AppName\app.db")) { Join-Path $DbDir "$AppName\app.db" } else { Join-Path $DbDir 'app.db' }
 $StartMenuLnk = Join-Path ([Environment]::GetFolderPath('Programs')) "$AppName.lnk"
 $DesktopLnk   = Join-Path ([Environment]::GetFolderPath('Desktop')) "$AppName.lnk"
 $UninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$AppId"
 
 function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 
-$targets = @($InstallDir, $StartMenuLnk, $DesktopLnk, $UninstallKey) | Where-Object { Test-Path $_ }
+$targets = @($InstallDir, $DbFile, $DbDir, $StartMenuLnk, $DesktopLnk, $UninstallKey) | Where-Object { Test-Path $_ }
 if (-not $targets) {
     Write-Host "$AppName does not appear to be installed."
     exit 0
@@ -51,6 +53,10 @@ try {
 
     Write-Step 'Removing Settings > Apps entry...'
     if (Test-Path $UninstallKey) { Remove-Item -Recurse -Force $UninstallKey }
+
+    Write-Step "Removing database ($DbFile)..."
+    if (Test-Path $DbFile) { Remove-Item -Force $DbFile }
+    if (Test-Path $DbDir) { Remove-Item -Recurse -Force $DbDir }
 
     Write-Step "Removing $InstallDir..."
     # This script may itself live in the install dir - step out of it first.
