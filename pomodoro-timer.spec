@@ -25,7 +25,11 @@ hiddenimports = [
     "psutil",
     "pyautogui",
     "PIL._tkinter_finder",
+    "platformdirs",
+    "sqlite3",
+    "unittest.mock",
     # Local packages (media_controls is a namespace package - list them explicitly)
+    "database.db_handler",
     "media_controls.spotify_handler",
     "media_controls.rest_media_handler",
     "ui.timer_view",

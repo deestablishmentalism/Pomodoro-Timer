@@ -21,6 +21,9 @@ MODULES = [
     "PIL.Image",
     "PIL.ImageTk",
     "pyautogui",
+    "platformdirs",
+    "sqlite3",
+    "database.db_handler",
     "media_controls.spotify_handler",
     "media_controls.rest_media_handler",
     "ui.timer_view",
@@ -79,6 +82,33 @@ def run() -> int:
     except Exception:
         failed = True
         lines.append(f"FAIL  customtkinter theme check\n{traceback.format_exc()}")
+
+    # Mock test: database creation and insertion in an isolated temp directory
+    try:
+        import contextlib
+        import sqlite3
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from database.db_handler import Db_Handler
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_dir = Path(tmpdir) / "pomodoro_self_test_db"
+            with patch("database.db_handler.user_data_dir", return_value=str(mock_dir)):
+                db = Db_Handler()
+                db.insert_timer_history(25, 5, 4, "/mock/media")
+                db_file = mock_dir / "app.db"
+                ok = db_file.is_file()
+                with contextlib.closing(sqlite3.connect(db_file)) as conn:
+                    row = conn.execute(
+                        "SELECT work_duration, rest_duration, cycles, rest_media_directory FROM timer_history"
+                    ).fetchone()
+                ok = ok and row == (25, 5, 4, "/mock/media")
+        failed |= not ok
+        lines.append(f"{'ok  ' if ok else 'FAIL'}  db     database creation and insertion")
+    except Exception:
+        failed = True
+        lines.append(f"FAIL  database creation and insertion\n{traceback.format_exc()}")
 
     lines.append("SELF-TEST FAILED" if failed else "SELF-TEST PASSED")
     report = "\n".join(lines)
