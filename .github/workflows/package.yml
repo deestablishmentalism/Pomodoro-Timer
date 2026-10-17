@@ -52,8 +52,8 @@ jobs:
 
       - name: Smoke test (bundle starts and imports cleanly)
         run: |
-          dist/pomodoro-timer/pomodoro-timer --self-test
           sudo apt-get update && sudo apt-get install -y xvfb
+          xvfb-run -a dist/pomodoro-timer/pomodoro-timer --self-test
           # The GUI never exits on its own: success = still running after 10s without crashing
           set +e
           timeout 10 xvfb-run -a dist/pomodoro-timer/pomodoro-timer
