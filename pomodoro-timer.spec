@@ -30,9 +30,10 @@ hiddenimports = [
     "media_controls.rest_media_handler",
     "ui.timer_view",
     "utils.paths",
+    "utils.self_test",
 ]
 if IS_WINDOWS:
-    hiddenimports += ["pygetwindow", "ctypes.wintypes"]
+    hiddenimports += ["pygetwindow", "pyrect", "ctypes.wintypes"]
 else:
     hiddenimports += ["Xlib", "Xlib.display"]  # pyautogui's X11 backend
 
@@ -45,7 +46,10 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["test", "unittest", "pydoc_data", "PyInstaller"],
+    # NOTE: do NOT exclude "unittest" (or "doctest"/"pdb"): on Windows
+    # pyautogui/spotify_handler -> pygetwindow -> pyrect does `import doctest` at module
+    # level, and doctest imports unittest. Excluding it crashes the app at startup.
+    excludes=["test", "pydoc_data", "PyInstaller"],
     noarchive=False,
 )
 
